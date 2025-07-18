@@ -1,0 +1,1605 @@
+ <!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CF Training Dashboard PRO - v901</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        html { scroll-behavior: smooth; }
+        .stat-card, .movement-card { transition: all 0.3s ease; }
+        .stat-card:hover, .movement-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); }
+        .fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .nav-link { transition: all 0.2s ease-in-out; }
+        .nav-link:hover { background-color: #eef2ff; color: #4f46e5; }
+        
+        /* Estilos para la notificación de RM */
+        .pr-notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: linear-gradient(135deg, #4f46e5, #8b5cf6);
+            color: white;
+            padding: 2rem 3rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            text-align: center;
+            animation: prPulse 1.5s infinite alternate, fadeIn 0.5s ease-out;
+            max-width: 90%;
+            width: 400px;
+        }
+        
+        @keyframes prPulse {
+            0% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2); }
+            100% { transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3); }
+        }
+        
+        .pr-emoji {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: bounce 0.8s infinite alternate;
+        }
+        
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-15px); }
+        }
+        
+        .pr-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        
+        .pr-details {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .pr-close {
+            background: white;
+            color: #4f46e5;
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 9999px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .pr-close:hover {
+            background: #eef2ff;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+    <div class="flex flex-col h-screen">
+        <header class="bg-white shadow-md sticky top-0 z-40">
+            <div class="container mx-auto px-6 py-3 flex justify-between items-center">
+                <div class="text-2xl font-bold text-blue-600">
+                    <i class="fas fa-dumbbell mr-2"></i>CF TRACKER <span class="text-xs text-blue-400">v901</span>
+                </div>
+                <nav class="hidden md:flex space-x-2">
+                    <a href="#dashboard-section" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Dashboard</a>
+                    <a href="#workouts-section" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Entrenamientos</a>
+                    <a href="#movements-section" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Movimientos</a>
+                    <a href="#history-section" class="nav-link px-3 py-2 rounded-md text-sm font-medium text-gray-700">Histórico</a>
+                </nav>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center" id="newWorkoutBtn">
+                    <i class="fas fa-plus mr-2"></i> Nuevo
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-grow overflow-y-auto p-4 md:p-6">
+            <div id="dashboard-section" class="section-container">
+                <h1 class="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Dashboard</h1>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" id="statsGrid"></div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Volumen por Movimientos WL</h3>
+                        <canvas id="volumeByMovementChart" height="250"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Volumen de Movimientos WOD</h3>
+                        <canvas id="wodVolumeChart" height="250"></canvas>
+                    </div>
+                </div>
+                
+                <div class="mb-8 fade-in" id="personalRecordsCard"></div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Top 5 Movimientos (Frecuencia WL)</h3>
+                        <div id="topMovementsList"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Balance de Categorías</h3>
+                        <canvas id="categoryBalanceChart" height="250"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Mi Evolución</h3>
+                        <canvas id="radarChart" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="workouts-section" class="section-container pt-10">
+                <h1 class="text-3xl font-bold mb-6 text-gray-800 border-b pb-2">Registro de Entrenamientos</h1>
+                <p class="text-center text-gray-500">Haz clic en el botón "Nuevo" en la barra de navegación para registrar un nuevo entrenamiento.</p>
+            </div>
+            
+            <div id="movements-section" class="section-container pt-10">
+                <div class="flex justify-between items-center mb-6 border-b pb-2">
+                    <h1 class="text-3xl font-bold text-gray-800">Mis Movimientos</h1>
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center" id="newMovementBtn">
+                        <i class="fas fa-plus mr-2"></i> Nuevo Movimiento
+                    </button>
+                </div>
+                <div class="mb-6">
+                    <div class="flex space-x-2 overflow-x-auto pb-2">
+                        <button class="category-filter px-4 py-2 rounded-full bg-blue-600 text-white whitespace-nowrap" data-category="all">Todos</button>
+                        <button class="category-filter px-4 py-2 rounded-full bg-gray-200 hover:bg-gray-300 whitespace-nowrap" data-category="weightlifting">Weightlifting</button>
+                        <button class="category-filter px-4 py-2 rounded-full bg-gray-200 hover:bg-gray-300 whitespace-nowrap" data-category="gymnastics">Gimnasia</button>
+                        <button class="category-filter px-4 py-2 rounded-full bg-gray-200 hover:bg-gray-300 whitespace-nowrap" data-category="cardio">Cardio</button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="movementsGrid"></div>
+            </div>
+
+            <div id="history-section" class="section-container pt-10">
+                <div class="flex justify-between items-center mb-6 border-b pb-2">
+                    <h1 class="text-3xl font-bold text-gray-800">Histórico de Entrenamientos</h1>
+                    <div class="flex space-x-2">
+                        <select class="px-4 py-2 border rounded-lg" id="historyMonthFilter">
+                            <option value="all">Todos los meses</option>
+                        </select>
+                        <select class="px-4 py-2 border rounded-lg" id="historyTypeFilter">
+                            <option value="all">Todos los tipos</option>
+                            <option value="weightlifting">Weightlifting</option>
+                            <option value="wod">WOD</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Detalles</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">RPE</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Volumen/Reps</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="historyTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="mt-4 flex justify-between items-center">
+                    <div class="text-sm text-gray-500" id="historyCount"></div>
+                    <div class="flex space-x-2">
+                        <button class="px-4 py-2 border rounded-lg hover:bg-gray-100 disabled:opacity-50" id="prevHistoryPage" disabled>
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <button class="px-4 py-2 border rounded-lg hover:bg-gray-100 disabled:opacity-50" id="nextHistoryPage" disabled>
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modales -->
+    <div id="trainingTypeModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">¿Qué quieres registrar?</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="closeTypeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="training-type-card bg-white border border-blue-200 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 transition" id="weightliftingOption">
+                    <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-weight-hanging text-blue-600 text-2xl"></i>
+                    </div>
+                    <h4 class="font-semibold">Weightlifting</h4>
+                    <p class="text-sm text-gray-500 mt-1">Levantamientos</p>
+                </div>
+                <div class="training-type-card bg-white border border-green-200 rounded-lg p-6 text-center cursor-pointer hover:border-green-400 transition" id="wodOption">
+                    <div class="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fas fa-stopwatch text-green-600 text-2xl"></i>
+                    </div>
+                    <h4 class="font-semibold">WOD</h4>
+                    <p class="text-sm text-gray-500 mt-1">Workout of the Day</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="weightliftingModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 overflow-y-auto py-8">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8 fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Registrar Weightlifting</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="closeWeightliftingModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="weightliftingForm">
+                <input type="hidden" id="weightliftingEditId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">Fecha*</label>
+                        <input type="date" id="wlDate" class="w-full px-4 py-2 border rounded-lg" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">RPE Sesión (1-10)*</label>
+                        <select id="wlRpe" class="w-full px-4 py-2 border rounded-lg" required>
+                            <option value="">RPE</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <h4 class="text-lg font-semibold mb-3 border-b pb-2">Movimientos</h4>
+                    <div id="movementGroupsContainer"></div>
+                    <button type="button" class="mt-4 text-blue-600 hover:text-blue-800 flex items-center" id="addMovementBtn">
+                        <i class="fas fa-plus-circle mr-2"></i>Añadir movimiento
+                    </button>
+                </div>
+                <div class="mt-6 text-right">
+                    <div class="text-xl font-semibold mb-4">Volumen Total: <span id="totalVolume">0</span> kg</div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" class="px-6 py-2 border rounded-lg hover:bg-gray-100" id="cancelWeightlifting">Cancelar</button>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">Guardar</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="wodModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50 overflow-y-auto py-8">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl my-8 fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Registrar WOD</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="closeWodModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="wodForm">
+                <input type="hidden" id="wodEditId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">Fecha*</label>
+                        <input type="date" id="wodDate" class="w-full px-4 py-2 border rounded-lg" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">Tipo de WOD*</label>
+                        <select id="wodType" class="w-full px-4 py-2 border rounded-lg" required>
+                            <option value="">Selecciona tipo</option>
+                            <option value="AMRAP">AMRAP</option>
+                            <option value="EMOM">EMOM</option>
+                            <option value="RFT">RFT</option>
+                            <option value="TABATA">TABATA</option>
+                            <option value="For Time">For Time</option>
+                            <option value="Chipper">Chipper</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group mt-4">
+                    <label class="block text-gray-700 font-medium mb-2">Descripción</label>
+                    <textarea id="wodDescription" class="w-full px-4 py-2 border rounded-lg" rows="3"></textarea>
+                </div>
+                <div class="mt-4">
+                    <label class="block text-gray-700 font-medium mb-2">Movimientos y Repeticiones</label>
+                    <div class="flex mb-2">
+                        <select id="wodMovementSelect" class="flex-1 px-4 py-2 border rounded-l-lg">
+                            <option value="">Selecciona movimiento</option>
+                        </select>
+                        <button type="button" id="addWodMovementBtn" class="bg-blue-600 text-white px-4 py-2 rounded-r-lg hover:bg-blue-700">
+                            <i class="fas fa-plus"></i> Añadir
+                        </button>
+                    </div>
+                    <div id="wodMovementsContainer" class="space-y-2"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">RPE (1-10)*</label>
+                        <select id="wodRpe" class="w-full px-4 py-2 border rounded-lg" required>
+                            <option value="">RPE</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                            <option value="7">7</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="block text-gray-700 font-medium mb-2">Resultado*</label>
+                        <input type="text" id="wodResult" class="w-full px-4 py-2 border rounded-lg" placeholder="Ej: 15:25, 10 Rondas" required>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" class="px-6 py-2 border rounded-lg hover:bg-gray-100" id="cancelWod">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="newMovementModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold">Nuevo Movimiento</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="closeMovementModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="movementForm">
+                <input type="hidden" id="movementEditId">
+                <div class="form-group mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Nombre*</label>
+                    <input type="text" id="movementName" class="w-full px-4 py-2 border rounded-lg" required>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Categoría*</label>
+                    <select id="movementCategory" class="w-full px-4 py-2 border rounded-lg" required>
+                        <option value="">Selecciona</option>
+                        <option value="weightlifting">Weightlifting</option>
+                        <option value="gymnastics">Gimnasia</option>
+                        <option value="cardio">Cardio</option>
+                    </select>
+                </div>
+                <div class="form-group mb-4">
+                    <label class="block text-gray-700 font-medium mb-2">Descripción</label>
+                    <textarea id="movementDescription" class="w-full px-4 py-2 border rounded-lg" rows="3"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" class="px-6 py-2 border rounded-lg hover:bg-gray-100" id="cancelMovement">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div id="movementStatsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl fade-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold" id="movementStatsTitle">Estadísticas</h3>
+                <button class="text-gray-500 hover:text-gray-700" id="closeStatsModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-lg mb-2">Progreso de Peso Máximo</h4>
+                    <canvas id="movementMaxWeightChart" height="200"></canvas>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-lg mb-2">Frecuencia de Entrenamiento</h4>
+                    <canvas id="movementFrequencyChart" height="200"></canvas>
+                </div>
+            </div>
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-lg mb-2">Historial Reciente</h4>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-100">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Peso (kg)</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reps</th>
+                                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">RPE</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200" id="movementHistoryTable"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button type="button" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg" id="closeStatsModalBtn">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Storage - Versión 901 (con estadísticas de movimientos corregidas)
+        let appData = {
+            version: '9.0.1',
+            workouts: [],
+            movements: [
+                { id: 1, name: 'Back Squat', category: 'weightlifting' },
+                { id: 2, name: 'Deadlift', category: 'weightlifting' },
+                { id: 3, name: 'Clean & Jerk', category: 'weightlifting' },
+                { id: 4, name: 'Snatch', category: 'weightlifting' },
+                { id: 5, name: 'Bench Press', category: 'weightlifting' },
+                { id: 6, name: 'Pull-ups', category: 'gymnastics' },
+                { id: 7, name: 'Muscle-ups', category: 'gymnastics' },
+                { id: 8, name: 'Handstand Walk', category: 'gymnastics' },
+                { id: 9, name: 'Thrusters', category: 'weightlifting' },
+                { id: 10, name: 'Burpees', category: 'gymnastics' },
+                { id: 11, name: 'Box Jumps', category: 'gymnastics' },
+                { id: 12, name: 'Double Unders', category: 'cardio' }
+            ],
+            personalRecords: {},
+            charts: {},
+            historyPage: 1,
+            itemsPerPage: 5
+        };
+
+        // --- CORE APP LOGIC ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            initEventListeners();
+            updateAllSections();
+        });
+
+        function loadData() {
+            const savedData = localStorage.getItem('cfTrackerData');
+            if (savedData) {
+                console.log("✅ Datos cargados desde localStorage.");
+                try {
+                    const parsedData = JSON.parse(savedData);
+                    if (parsedData.workouts && Array.isArray(parsedData.workouts)) {
+                        // Migration for WODs from movementIds to movements array
+                        parsedData.workouts.forEach(w => {
+                            if (w.type === 'wod' && w.movementIds && !w.movements) {
+                                console.log(`Migrando WOD antiguo: ${w.name || w.id}`);
+                                w.movements = w.movementIds.map(id => ({ id: id, reps: 0 }));
+                                delete w.movementIds;
+                            }
+                        });
+                        appData = { 
+                            ...appData, 
+                            ...parsedData, 
+                            personalRecords: parsedData.personalRecords || {},
+                            charts: {}, 
+                            historyPage: 1 
+                        };
+                    }
+                } catch (e) { console.error("❌ Error al parsear datos de localStorage:", e); }
+            }
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem('cfTrackerData', JSON.stringify({ ...appData, charts: {} }));
+                console.log("✅ Datos guardados correctamente en localStorage.");
+            } catch (e) { console.error("❌ Error al guardar datos:", e); alert('Error al guardar los datos.'); }
+        }
+
+        function updateAllSections() {
+            updateDashboard();
+            renderMovements();
+            updateHistoryTable();
+        }
+
+        // --- FUNCIONES PARA MANEJAR RECORDS PERSONALES ---
+        function checkForNewPRs(workout) {
+            if (workout.type !== 'weightlifting') return;
+            
+            workout.movementGroups?.forEach(group => {
+                const movementId = group.movementId;
+                const movementName = group.movementName;
+                
+                // Encontrar el peso máximo en este entrenamiento para este movimiento
+                const maxWeightInWorkout = group.setsData.reduce((max, set) => {
+                    return set.weight > max ? set.weight : max;
+                }, 0);
+                
+                // Verificar si es un nuevo récord
+                if (maxWeightInWorkout > 0) {
+                    const currentPR = appData.personalRecords[movementId]?.weight || 0;
+                    
+                    if (maxWeightInWorkout > currentPR) {
+                        // ¡Nuevo récord!
+                        appData.personalRecords[movementId] = {
+                            weight: maxWeightInWorkout,
+                            date: workout.date,
+                            workoutId: workout.id
+                        };
+                        
+                        // Mostrar notificación especial
+                        showPRNotification(movementName, maxWeightInWorkout, currentPR);
+                    }
+                }
+            });
+        }
+
+        function showPRNotification(movementName, newWeight, oldWeight) {
+            const emojis = ["🔥", "💪", "🚀", "🏆", "🎯", "👑", "✨", "⚡"];
+            const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+            
+            const prNotification = document.createElement('div');
+            prNotification.className = 'pr-notification';
+            prNotification.innerHTML = `
+                <div class="pr-emoji">${randomEmoji}</div>
+                <div class="pr-title">¡NUEVO RÉCORD PERSONAL!</div>
+                <div class="pr-details">
+                    <strong>${movementName}</strong><br>
+                    ${oldWeight > 0 ? `De ${oldWeight}kg a ` : ''}${newWeight}kg
+                </div>
+                <button class="pr-close" onclick="this.parentElement.remove()">¡VAMOS!</button>
+            `;
+            
+            document.body.appendChild(prNotification);
+            
+            // Reproducir sonido de celebración (opcional)
+            if (typeof Audio !== 'undefined') {
+                const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3');
+                audio.play().catch(e => console.log("No se pudo reproducir sonido:", e));
+            }
+            
+            // Eliminar automáticamente después de 5 segundos
+            setTimeout(() => {
+                if (prNotification.parentNode) {
+                    prNotification.remove();
+                }
+            }, 5000);
+        }
+
+        function updatePersonalRecords() {
+            const container = document.getElementById('personalRecordsCard');
+            
+            // Obtener todos los records personales
+            const prs = Object.entries(appData.personalRecords)
+                .map(([movementId, record]) => {
+                    const movement = appData.movements.find(m => m.id == movementId);
+                    return {
+                        name: movement?.name || 'Desconocido',
+                        weight: record.weight,
+                        date: record.date
+                    };
+                })
+                .sort((a, b) => b.weight - a.weight);
+            
+            if (prs.length > 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold">Mis Records Personales</h3>
+                            <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                ${prs.length} records
+                            </span>
+                        </div>
+                        <div class="space-y-3">
+                            ${prs.map(pr => `
+                                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                                    <div>
+                                        <span class="font-medium">${pr.name}</span>
+                                        <span class="text-xs text-gray-500 block">${new Date(pr.date).toLocaleDateString()}</span>
+                                    </div>
+                                    <span class="bg-indigo-100 text-indigo-800 px-3 py-1 rounded-full font-bold">
+                                        ${pr.weight}kg
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="bg-white rounded-lg shadow p-6 fade-in">
+                        <h3 class="text-lg font-semibold mb-4">Mis Records Personales</h3>
+                        <p class="text-center text-gray-500 py-4">No hay records personales registrados todavía</p>
+                    </div>
+                `;
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        function initEventListeners() {
+            document.getElementById('newWorkoutBtn').addEventListener('click', () => openModal('trainingTypeModal', false));
+            document.getElementById('closeTypeModal').addEventListener('click', () => closeModal('trainingTypeModal'));
+            
+            document.getElementById('weightliftingOption').addEventListener('click', () => {
+                openModal('weightliftingModal');
+                resetWeightliftingForm();
+                document.getElementById('wlDate').valueAsDate = new Date();
+                addMovementGroup();
+            });
+            
+            document.getElementById('wodOption').addEventListener('click', () => {
+                openModal('wodModal');
+                resetWodForm();
+                document.getElementById('wodDate').valueAsDate = new Date();
+                populateWodMovementSelect();
+            });
+            
+            document.getElementById('newMovementBtn').addEventListener('click', () => {
+                openModal('newMovementModal', false);
+                document.getElementById('movementForm').reset();
+                document.getElementById('movementEditId').value = '';
+            });
+
+            document.getElementById('addMovementBtn').addEventListener('click', addMovementGroup);
+            document.getElementById('addWodMovementBtn').addEventListener('click', addMovementToWod);
+            
+            document.getElementById('weightliftingForm').addEventListener('submit', saveWeightliftingWorkout);
+            document.getElementById('wodForm').addEventListener('submit', saveWodWorkout);
+            document.getElementById('movementForm').addEventListener('submit', saveMovement);
+
+            document.querySelectorAll('.category-filter').forEach(b => b.addEventListener('click', function() {
+                document.querySelectorAll('.category-filter').forEach(btn => btn.classList.replace('bg-blue-600', 'bg-gray-200') || btn.classList.remove('text-white'));
+                this.classList.replace('bg-gray-200', 'bg-blue-600');
+                this.classList.add('text-white');
+                renderMovements(this.dataset.category);
+            }));
+
+            document.querySelectorAll('[id^="close"], [id^="cancel"]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.closest('.fixed').id)));
+            window.addEventListener('click', (e) => { if(e.target.classList.contains('fixed')) closeModal(e.target.id); });
+            
+            ['historyMonthFilter', 'historyTypeFilter'].forEach(id => document.getElementById(id).addEventListener('change', () => { appData.historyPage = 1; updateHistoryTable(); }));
+            document.getElementById('prevHistoryPage').addEventListener('click', () => { if(appData.historyPage > 1) { appData.historyPage--; updateHistoryTable(); } });
+            document.getElementById('nextHistoryPage').addEventListener('click', () => { appData.historyPage++; updateHistoryTable(); });
+            
+            // Nuevo listener para el botón de cerrar estadísticas
+            document.getElementById('closeStatsModalBtn')?.addEventListener('click', () => closeModal('movementStatsModal'));
+        }
+
+        const openModal = (modalId, closeTrainingType = true) => {
+            if(closeTrainingType) closeModal('trainingTypeModal');
+            document.getElementById(modalId).classList.remove('hidden');
+        };
+        const closeModal = (modalId) => document.getElementById(modalId).classList.add('hidden');
+
+        // --- WORKOUT & MOVEMENT LOGIC ---
+        function addMovementGroup(movementData = null) {
+            const container = document.getElementById('movementGroupsContainer');
+            const groupId = Date.now();
+            container.insertAdjacentHTML('beforeend', `<div class="movement-group border border-gray-200 rounded-lg p-4 mb-4 fade-in" data-group-id="${groupId}"><div class="grid grid-cols-1 md:grid-cols-3 gap-4"><div><label class="block text-sm font-medium mb-1">Movimiento*</label><select class="movement-select w-full px-3 py-2 border rounded-lg" required><option value="">Selecciona</option>${appData.movements.filter(m=>m.category==='weightlifting').map(m=>`<option value="${m.id}" ${movementData?.movementId==m.id?'selected':''}>${m.name}</option>`).join('')}</select></div><div><label class="block text-sm font-medium mb-1">Series*</label><input type="number" min="1" value="${movementData?.sets || 1}" class="sets-input w-full px-3 py-2 border rounded-lg" required></div><div class="flex items-end"><button type="button" class="remove-movement bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg w-full text-sm"><i class="fas fa-trash mr-2"></i>Eliminar</button></div></div><div class="sets-container mt-3">${generateSetInputs(movementData?.sets || 1, movementData?.setsData)}</div></div>`);
+            const newGroup = container.querySelector(`[data-group-id="${groupId}"]`);
+            newGroup.querySelector('.remove-movement').addEventListener('click', () => { newGroup.remove(); calculateTotalVolume(); });
+            newGroup.querySelectorAll('input').forEach(input => input.addEventListener('input', calculateTotalVolume));
+            newGroup.querySelector('.sets-input').addEventListener('change', function() {
+                const setsContainer = newGroup.querySelector('.sets-container');
+                setsContainer.innerHTML = generateSetInputs(parseInt(this.value) || 1);
+                setsContainer.querySelectorAll('input').forEach(input => input.addEventListener('input', calculateTotalVolume));
+                calculateTotalVolume();
+            });
+            calculateTotalVolume();
+        }
+
+        function generateSetInputs(numSets, setsData = null) {
+            let html = '<label class="block text-sm font-medium text-gray-600 mb-2">Detalles por serie:</label>';
+            for (let i = 1; i <= numSets; i++) {
+                const setData = setsData?.[i-1] || {};
+                html += `<div class="set-row"><label class="text-sm text-gray-500">Serie ${i}</label><input type="number" min="0" step="0.5" placeholder="Peso (kg)" value="${setData.weight||''}" class="weight-input w-full px-3 py-1 border rounded"><input type="number" min="1" placeholder="Reps" value="${setData.reps||''}" class="reps-input w-full px-3 py-1 border rounded"></div>`;
+            }
+            return html;
+        }
+
+        function calculateTotalVolume() {
+            let total = 0;
+            document.querySelectorAll('.movement-group').forEach(group => {
+                group.querySelectorAll('.weight-input').forEach((input, i) => {
+                    total += (parseFloat(input.value)||0) * (parseInt(group.querySelectorAll('.reps-input')[i].value)||0);
+                });
+            });
+            document.getElementById('totalVolume').textContent = total.toFixed(1);
+        }
+
+        const resetWeightliftingForm = () => { document.getElementById('weightliftingForm').reset(); document.getElementById('movementGroupsContainer').innerHTML = ''; document.getElementById('totalVolume').textContent = '0'; };
+        const resetWodForm = () => { document.getElementById('wodForm').reset(); document.getElementById('wodMovementsContainer').innerHTML = ''; };
+        
+        function populateWodMovementSelect() {
+            const select = document.getElementById('wodMovementSelect');
+            select.innerHTML = '<option value="">Selecciona</option>' + appData.movements.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        }
+
+        function addMovementToWod() {
+            const select = document.getElementById('wodMovementSelect');
+            const movId = select.value;
+            
+            if (!movId) {
+                alert('Por favor, selecciona un movimiento primero');
+                return;
+            }
+            
+            if (document.querySelector(`.wod-movement-item[data-id="${movId}"]`)) {
+                alert('Este movimiento ya ha sido añadido al WOD');
+                return;
+            }
+            
+            const mov = appData.movements.find(m => m.id == movId);
+            if (!mov) return;
+            
+            const container = document.getElementById('wodMovementsContainer');
+            const movementItem = document.createElement('div');
+            movementItem.className = 'wod-movement-item flex items-center gap-3 p-2 bg-gray-50 rounded-lg fade-in';
+            movementItem.dataset.id = mov.id;
+            movementItem.innerHTML = `
+                <span class="font-semibold flex-grow">${mov.name}</span>
+                <input type="number" min="1" class="wod-reps-input w-24 px-2 py-1 border rounded-md" placeholder="Reps" required>
+                <button type="button" class="text-red-500 hover:text-red-700" onclick="this.parentElement.remove()">
+                    <i class="fas fa-trash"></i>
+                </button>
+            `;
+            container.appendChild(movementItem);
+            select.value = '';
+        }
+
+        function saveWeightliftingWorkout(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const date = form.querySelector('#wlDate').value;
+            const rpe = form.querySelector('#wlRpe').value;
+            
+            if (!date || !rpe) {
+                alert('Por favor, completa todos los campos obligatorios');
+                return;
+            }
+            
+            const movementGroups = Array.from(document.querySelectorAll('.movement-group')).map(group => {
+                const movementId = parseInt(group.querySelector('.movement-select').value);
+                const movement = appData.movements.find(m => m.id === movementId);
+                if (!movement) return null;
+                
+                const sets = parseInt(group.querySelector('.sets-input').value) || 1;
+                const setsData = Array.from({length: sets}, (_, i) => {
+                    const weightInputs = group.querySelectorAll('.weight-input');
+                    const repsInputs = group.querySelectorAll('.reps-input');
+                    return {
+                        weight: parseFloat(weightInputs[i]?.value) || 0,
+                        reps: parseInt(repsInputs[i]?.value) || 0
+                    };
+                });
+                
+                return {
+                    movementId,
+                    movementName: movement.name,
+                    sets,
+                    setsData
+                };
+            }).filter(Boolean);
+            
+            if (movementGroups.length === 0) {
+                alert('Por favor, añade al menos un movimiento');
+                return;
+            }
+            
+            const totalVolume = parseFloat(document.getElementById('totalVolume').textContent);
+            
+            const workout = {
+                id: document.getElementById('weightliftingEditId').value || Date.now(),
+                type: 'weightlifting',
+                date,
+                rpe,
+                movementGroups,
+                totalVolume,
+                createdAt: new Date().toISOString()
+            };
+            
+            const existingIndex = appData.workouts.findIndex(w => w.id == workout.id);
+            if (existingIndex >= 0) {
+                appData.workouts[existingIndex] = workout;
+            } else {
+                appData.workouts.unshift(workout);
+            }
+            
+            checkForNewPRs(workout);
+            saveData();
+            closeModal('weightliftingModal');
+            updateAllSections();
+            showNotification('✅ Entrenamiento guardado correctamente');
+        }
+
+        function saveWodWorkout(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const date = form.querySelector('#wodDate').value;
+            const type = form.querySelector('#wodType').value;
+            const rpe = form.querySelector('#wodRpe').value;
+            const result = form.querySelector('#wodResult').value;
+            
+            if (!date || !type || !rpe || !result) {
+                alert('Por favor, completa todos los campos obligatorios');
+                return;
+            }
+            
+            const movements = Array.from(document.querySelectorAll('.wod-movement-item')).map(item => {
+                const movementId = parseInt(item.dataset.id);
+                const movement = appData.movements.find(m => m.id === movementId);
+                const reps = parseInt(item.querySelector('.wod-reps-input').value) || 0;
+                
+                return {
+                    id: movementId,
+                    name: movement?.name || 'Desconocido',
+                    reps
+                };
+            });
+            
+            const workout = {
+                id: document.getElementById('wodEditId').value || Date.now(),
+                type: 'wod',
+                wodType: type,
+                date,
+                description: form.querySelector('#wodDescription').value,
+                rpe,
+                result,
+                movements,
+                createdAt: new Date().toISOString()
+            };
+            
+            const existingIndex = appData.workouts.findIndex(w => w.id == workout.id);
+            if (existingIndex >= 0) {
+                appData.workouts[existingIndex] = workout;
+            } else {
+                appData.workouts.unshift(workout);
+            }
+            
+            saveData();
+            closeModal('wodModal');
+            updateAllSections();
+            showNotification('✅ WOD guardado correctamente');
+        }
+
+        function saveMovement(e) {
+            e.preventDefault();
+            
+            const form = e.target;
+            const name = form.querySelector('#movementName').value;
+            const category = form.querySelector('#movementCategory').value;
+            
+            if (!name || !category) {
+                alert('Por favor, completa todos los campos obligatorios');
+                return;
+            }
+            
+            const movement = {
+                id: document.getElementById('movementEditId').value || Date.now(),
+                name,
+                category,
+                description: form.querySelector('#movementDescription').value
+            };
+            
+            const existingIndex = appData.movements.findIndex(m => m.id == movement.id);
+            if (existingIndex >= 0) {
+                appData.movements[existingIndex] = movement;
+            } else {
+                appData.movements.unshift(movement);
+            }
+            
+            saveData();
+            closeModal('newMovementModal');
+            renderMovements();
+            showNotification('✅ Movimiento guardado correctamente');
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center fade-in';
+            notification.innerHTML = `<span>${message}</span><button class="ml-4" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+
+        // --- DASHBOARD FUNCTIONS ---
+        function updateDashboard() {
+            updateStatsCards();
+            updateVolumeCharts();
+            updatePersonalRecords();
+            updateTopMovementsList();
+            updateRadarChart();
+        }
+
+        function updateStatsCards() {
+            const stats = calculateWorkoutStats();
+            const cards = [
+                { 
+                    title: 'Sesiones este mes', 
+                    value: stats.thisMonthWorkouts, 
+                    icon: 'fa-calendar-check', 
+                    trend: stats.workoutsTrend, 
+                    color: 'blue',
+                    description: `vs ${stats.lastMonthWorkouts} mes pasado`
+                },
+                { 
+                    title: 'Volumen semanal WL', 
+                    value: stats.weeklyWLVolume.toFixed(1), 
+                    icon: 'fa-weight-hanging', 
+                    trend: stats.volumeTrend, 
+                    color: 'purple',
+                    description: 'Promedio semanal'
+                },
+                { 
+                    title: 'Volumen total WL', 
+                    value: stats.totalWeightliftingVolume.toFixed(1), 
+                    icon: 'fa-dumbbell', 
+                    trend: stats.totalVolumeTrend, 
+                    color: 'indigo',
+                    description: 'Acumulado total'
+                },
+                { 
+                    title: 'RPE Promedio', 
+                    value: stats.avgRpe.toFixed(1), 
+                    icon: 'fa-chart-line', 
+                    trend: stats.rpeTrend, 
+                    color: 'green',
+                    description: 'Intensidad media'
+                }
+            ];
+            
+            const container = document.getElementById('statsGrid');
+            container.innerHTML = cards.map(card => `
+                <div class="stat-card bg-white rounded-lg shadow p-6 flex flex-col">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="bg-${card.color}-100 w-12 h-12 rounded-full flex items-center justify-center">
+                            <i class="fas ${card.icon} text-${card.color}-600 text-xl"></i>
+                        </div>
+                        <span class="text-sm px-2 py-1 rounded-full ${card.trend > 0 ? 'bg-green-100 text-green-800' : card.trend < 0 ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}">
+                            ${card.trend > 0 ? '↑' : card.trend < 0 ? '↓' : '→'} ${Math.abs(card.trend)}%
+                        </span>
+                    </div>
+                    <h3 class="text-gray-500 font-medium mb-1">${card.title}</h3>
+                    <p class="text-3xl font-bold text-gray-800">${card.value}</p>
+                    <p class="text-xs text-gray-500 mt-1">${card.description}</p>
+                </div>
+            `).join('');
+        }
+
+        function calculateWorkoutStats() {
+            const now = new Date();
+            const currentMonth = now.getMonth();
+            const currentYear = now.getFullYear();
+            const currentWeek = getWeekNumber(now);
+            
+            const thisMonthWorkouts = appData.workouts.filter(w => {
+                const date = new Date(w.date);
+                return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
+            });
+            
+            const lastMonthWorkouts = appData.workouts.filter(w => {
+                const date = new Date(w.date);
+                let month = currentMonth - 1;
+                let year = currentYear;
+                if (month < 0) { month = 11; year--; }
+                return date.getMonth() === month && date.getFullYear() === year;
+            });
+            
+            const thisWeekWorkouts = appData.workouts.filter(w => {
+                const date = new Date(w.date);
+                return getWeekNumber(date) === currentWeek && date.getFullYear() === currentYear;
+            });
+            
+            const totalWorkouts = appData.workouts.length;
+            const totalWeightliftingVolume = appData.workouts
+                .filter(w => w.type === 'weightlifting')
+                .reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+            
+            const weeklyWLVolume = thisWeekWorkouts
+                .filter(w => w.type === 'weightlifting')
+                .reduce((sum, w) => sum + (w.totalVolume || 0), 0) / (thisWeekWorkouts.length || 1);
+            
+            const workoutsTrend = lastMonthWorkouts.length > 0 ? 
+                ((thisMonthWorkouts.length - lastMonthWorkouts.length) / lastMonthWorkouts.length * 100) : 0;
+                
+            const volumeTrend = 0;
+            const totalVolumeTrend = 0;
+            const rpeTrend = 0;
+            
+            const validWorkouts = appData.workouts.filter(w => w.rpe);
+            const avgRpe = validWorkouts.length > 0 ? 
+                validWorkouts.reduce((sum, w) => sum + parseInt(w.rpe), 0) / validWorkouts.length : 0;
+            
+            return {
+                thisMonthWorkouts: thisMonthWorkouts.length,
+                lastMonthWorkouts: lastMonthWorkouts.length,
+                weeklyWLVolume,
+                totalWeightliftingVolume,
+                workoutsTrend,
+                volumeTrend,
+                totalVolumeTrend,
+                rpeTrend,
+                avgRpe
+            };
+        }
+
+        function getWeekNumber(date) {
+            const d = new Date(date);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+            const week1 = new Date(d.getFullYear(), 0, 4);
+            return 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+        }
+
+        function updateVolumeCharts() {
+            const wlWorkouts = appData.workouts.filter(w => w.type === 'weightlifting');
+            const movementVolumes = {};
+            
+            wlWorkouts.forEach(workout => {
+                workout.movementGroups?.forEach(group => {
+                    if (!movementVolumes[group.movementName]) {
+                        movementVolumes[group.movementName] = 0;
+                    }
+                    
+                    const groupVolume = group.setsData?.reduce((sum, set) => sum + (set.weight * set.reps), 0) || 0;
+                    movementVolumes[group.movementName] += groupVolume;
+                });
+            });
+            
+            const sortedMovements = Object.entries(movementVolumes)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            renderChart('volumeByMovementChart', {
+                type: 'bar',
+                data: {
+                    labels: sortedMovements.map(m => m[0]),
+                    datasets: [{
+                        label: 'Volumen (kg)',
+                        data: sortedMovements.map(m => m[1]),
+                        backgroundColor: '#4f46e5',
+                        borderColor: '#4f46e5',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+            
+            const wodWorkouts = appData.workouts.filter(w => w.type === 'wod');
+            const wodMovementCounts = {};
+            
+            wodWorkouts.forEach(workout => {
+                workout.movements?.forEach(mov => {
+                    if (!wodMovementCounts[mov.name]) {
+                        wodMovementCounts[mov.name] = 0;
+                    }
+                    wodMovementCounts[mov.name] += mov.reps || 1;
+                });
+            });
+            
+            const sortedWodMovements = Object.entries(wodMovementCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            renderChart('wodVolumeChart', {
+                type: 'bar',
+                data: {
+                    labels: sortedWodMovements.map(m => m[0]),
+                    datasets: [{
+                        label: 'Repeticiones',
+                        data: sortedWodMovements.map(m => m[1]),
+                        backgroundColor: '#10b981',
+                        borderColor: '#10b981',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+            
+            const categoryCounts = {
+                weightlifting: 0,
+                gymnastics: 0,
+                cardio: 0
+            };
+            
+            appData.workouts.forEach(workout => {
+                if (workout.type === 'weightlifting') {
+                    categoryCounts.weightlifting++;
+                } else if (workout.type === 'wod') {
+                    workout.movements?.forEach(mov => {
+                        const movement = appData.movements.find(m => m.id === mov.id);
+                        if (movement) {
+                            categoryCounts[movement.category]++;
+                        }
+                    });
+                }
+            });
+            
+            renderChart('categoryBalanceChart', {
+                type: 'doughnut',
+                data: {
+                    labels: ['Weightlifting', 'Gimnasia', 'Cardio'],
+                    datasets: [{
+                        data: [categoryCounts.weightlifting, categoryCounts.gymnastics, categoryCounts.cardio],
+                        backgroundColor: ['#4f46e5', '#f59e0b', '#ef4444'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        function updateRadarChart() {
+            const categories = ['Weightlifting', 'Gimnasia', 'Cardio', 'Fuerza', 'Resistencia', 'Flexibilidad'];
+            const scores = categories.map(() => Math.floor(Math.random() * 80) + 20);
+            
+            renderChart('radarChart', {
+                type: 'radar',
+                data: {
+                    labels: categories,
+                    datasets: [{
+                        label: 'Mi Evolución',
+                        data: scores,
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        borderColor: '#4f46e5',
+                        pointBackgroundColor: '#4f46e5',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#4f46e5'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        r: {
+                            angleLines: { display: true },
+                            suggestedMin: 0,
+                            suggestedMax: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderChart(canvasId, config) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+            
+            if (appData.charts[canvasId]) {
+                appData.charts[canvasId].destroy();
+            }
+            
+            appData.charts[canvasId] = new Chart(canvas.getContext('2d'), config);
+        }
+
+        function updateTopMovementsList() {
+            const movementCounts = {};
+            
+            appData.workouts
+                .filter(w => w.type === 'weightlifting')
+                .forEach(workout => {
+                    workout.movementGroups?.forEach(group => {
+                        if (!movementCounts[group.movementName]) {
+                            movementCounts[group.movementName] = 0;
+                        }
+                        movementCounts[group.movementName]++;
+                    });
+                });
+            
+            const topMovements = Object.entries(movementCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+            
+            const container = document.getElementById('topMovementsList');
+            container.innerHTML = topMovements.length > 0 ? 
+                topMovements.map(([name, count], i) => `
+                    <div class="flex items-center justify-between py-3 ${i < topMovements.length - 1 ? 'border-b border-gray-100' : ''}">
+                        <div class="flex items-center">
+                            <span class="text-gray-500 font-medium mr-3">${i + 1}</span>
+                            <span class="font-medium">${name}</span>
+                        </div>
+                        <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded-full">${count} sesiones</span>
+                    </div>
+                `).join('') : '<p class="text-gray-500 text-center py-4">No hay datos de movimientos</p>';
+        }
+
+        // --- MOVEMENTS SECTION ---
+        function renderMovements(category = 'all') {
+            const filteredMovements = category === 'all' ? 
+                appData.movements : 
+                appData.movements.filter(m => m.category === category);
+            
+            const container = document.getElementById('movementsGrid');
+            container.innerHTML = filteredMovements.length > 0 ? 
+                filteredMovements.map(movement => `
+                    <div class="movement-card bg-white rounded-lg shadow overflow-hidden fade-in">
+                        <div class="p-4">
+                            <div class="flex justify-between items-start">
+                                <h3 class="font-bold text-lg">${movement.name}</h3>
+                                <span class="text-xs px-2 py-1 rounded-full ${getCategoryColor(movement.category)}">
+                                    ${getCategoryName(movement.category)}
+                                </span>
+                            </div>
+                            ${movement.description ? `<p class="text-gray-600 mt-2 text-sm">${movement.description}</p>` : ''}
+                        </div>
+                        <div class="bg-gray-50 px-4 py-3 flex justify-between items-center">
+                            <button class="text-blue-600 hover:text-blue-800 text-sm font-medium" onclick="showMovementStats(${movement.id})">
+                                <i class="fas fa-chart-line mr-1"></i> Estadísticas
+                            </button>
+                            <div class="flex space-x-2">
+                                <button class="text-gray-500 hover:text-gray-700" onclick="editMovement(${movement.id})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="text-red-500 hover:text-red-700" onclick="deleteMovement(${movement.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('') : '<p class="text-gray-500 text-center col-span-3 py-8">No hay movimientos en esta categoría</p>';
+        }
+
+        function getCategoryName(category) {
+            return {
+                weightlifting: 'Weightlifting',
+                gymnastics: 'Gimnasia',
+                cardio: 'Cardio'
+            }[category] || category;
+        }
+
+        function getCategoryColor(category) {
+            return {
+                weightlifting: 'bg-indigo-100 text-indigo-800',
+                gymnastics: 'bg-amber-100 text-amber-800',
+                cardio: 'bg-red-100 text-red-800'
+            }[category] || 'bg-gray-100 text-gray-800';
+        }
+
+        function showMovementStats(movementId) {
+            const movement = appData.movements.find(m => m.id == movementId);
+            if (!movement) return;
+            
+            document.getElementById('movementStatsTitle').textContent = `Estadísticas: ${movement.name}`;
+            
+            // Obtener datos para el gráfico de peso máximo
+            const weightData = getMovementWeightData(movementId);
+            renderChart('movementMaxWeightChart', {
+                type: 'line',
+                data: {
+                    labels: weightData.labels,
+                    datasets: [{
+                        label: 'Peso Máximo (kg)',
+                        data: weightData.weights,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: false } }
+                }
+            });
+            
+            // Obtener datos para el gráfico de frecuencia
+            const frequencyData = getMovementFrequencyData(movementId);
+            renderChart('movementFrequencyChart', {
+                type: 'bar',
+                data: {
+                    labels: frequencyData.labels,
+                    datasets: [{
+                        label: 'Veces entrenado',
+                        data: frequencyData.counts,
+                        backgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+            
+            // Actualizar tabla de historial
+            updateMovementHistoryTable(movementId);
+            
+            openModal('movementStatsModal', false);
+        }
+
+        function getMovementWeightData(movementId) {
+            const workoutsWithMovement = appData.workouts
+                .filter(w => w.type === 'weightlifting')
+                .map(workout => {
+                    const group = workout.movementGroups?.find(g => g.movementId == movementId);
+                    if (!group) return null;
+                    
+                    const maxWeight = group.setsData.reduce((max, set) => Math.max(max, set.weight || 0), 0);
+                    return {
+                        date: workout.date,
+                        weight: maxWeight
+                    };
+                })
+                .filter(Boolean)
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Agrupar por mes para simplificar
+            const monthlyData = {};
+            workoutsWithMovement.forEach(entry => {
+                const date = new Date(entry.date);
+                const monthYear = `${date.getMonth()+1}/${date.getFullYear()}`;
+                
+                if (!monthlyData[monthYear] || entry.weight > monthlyData[monthYear].weight) {
+                    monthlyData[monthYear] = {
+                        weight: entry.weight,
+                        date: entry.date
+                    };
+                }
+            });
+            
+            const sortedEntries = Object.entries(monthlyData)
+                .sort((a, b) => new Date(a[1].date) - new Date(b[1].date));
+            
+            return {
+                labels: sortedEntries.map(([monthYear]) => monthYear),
+                weights: sortedEntries.map(([, data]) => data.weight)
+            };
+        }
+
+        function getMovementFrequencyData(movementId) {
+            const workoutsWithMovement = appData.workouts
+                .filter(w => w.type === 'weightlifting' && 
+                    w.movementGroups?.some(g => g.movementId == movementId))
+                .sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // Agrupar por mes
+            const monthlyCounts = {};
+            workoutsWithMovement.forEach(workout => {
+                const date = new Date(workout.date);
+                const monthYear = `${date.getMonth()+1}/${date.getFullYear()}`;
+                
+                if (!monthlyCounts[monthYear]) {
+                    monthlyCounts[monthYear] = 0;
+                }
+                monthlyCounts[monthYear]++;
+            });
+            
+            const sortedEntries = Object.entries(monthlyCounts)
+                .sort((a, b) => {
+                    const [aMonth, aYear] = a[0].split('/').map(Number);
+                    const [bMonth, bYear] = b[0].split('/').map(Number);
+                    return new Date(aYear, aMonth-1) - new Date(bYear, bMonth-1);
+                });
+            
+            return {
+                labels: sortedEntries.map(([monthYear]) => monthYear),
+                counts: sortedEntries.map(([, count]) => count)
+            };
+        }
+
+        function updateMovementHistoryTable(movementId) {
+            const workoutsWithMovement = appData.workouts
+                .filter(w => w.type === 'weightlifting' && 
+                    w.movementGroups?.some(g => g.movementId == movementId))
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .slice(0, 10); // Mostrar solo los últimos 10 registros
+            
+            const tbody = document.getElementById('movementHistoryTable');
+            
+            if (workoutsWithMovement.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-4 py-4 text-center text-gray-500">No hay datos registrados</td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            tbody.innerHTML = workoutsWithMovement.map(workout => {
+                const group = workout.movementGroups.find(g => g.movementId == movementId);
+                const bestSet = group.setsData.reduce((best, set) => {
+                    return (!best || set.weight > best.weight) ? set : best;
+                }, null);
+                
+                return `
+                    <tr>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${new Date(workout.date).toLocaleDateString()}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${bestSet?.weight || '-'} kg</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${bestSet?.reps || '-'}</td>
+                        <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${workout.rpe || '-'}/10</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function editMovement(movementId) {
+            const movement = appData.movements.find(m => m.id == movementId);
+            if (!movement) return;
+            
+            document.getElementById('movementEditId').value = movement.id;
+            document.getElementById('movementName').value = movement.name;
+            document.getElementById('movementCategory').value = movement.category;
+            document.getElementById('movementDescription').value = movement.description || '';
+            
+            openModal('newMovementModal', false);
+        }
+
+        function deleteMovement(movementId) {
+            if (confirm('¿Estás seguro de que quieres eliminar este movimiento? Esta acción no se puede deshacer.')) {
+                appData.movements = appData.movements.filter(m => m.id !== movementId);
+                saveData();
+                renderMovements();
+                showNotification('🗑️ Movimiento eliminado');
+            }
+        }
+
+        // --- HISTORY SECTION ---
+        function updateHistoryTable() {
+            const monthFilter = document.getElementById('historyMonthFilter').value;
+            const typeFilter = document.getElementById('historyTypeFilter').value;
+            
+            let filteredWorkouts = [...appData.workouts];
+            
+            if (monthFilter !== 'all') {
+                const currentMonth = new Date().getMonth();
+                filteredWorkouts = filteredWorkouts.filter(w => {
+                    const date = new Date(w.date);
+                    return date.getMonth() === currentMonth;
+                });
+            }
+            
+            if (typeFilter !== 'all') {
+                filteredWorkouts = filteredWorkouts.filter(w => w.type === typeFilter);
+            }
+            
+            const totalItems = filteredWorkouts.length;
+            const totalPages = Math.ceil(totalItems / appData.itemsPerPage);
+            const startIndex = (appData.historyPage - 1) * appData.itemsPerPage;
+            const paginatedWorkouts = filteredWorkouts.slice(startIndex, startIndex + appData.itemsPerPage);
+            
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = paginatedWorkouts.length > 0 ? 
+                paginatedWorkouts.map(workout => renderHistoryRow(workout)).join('') : 
+                '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No hay entrenamientos registrados</td></tr>';
+            
+            document.getElementById('prevHistoryPage').disabled = appData.historyPage <= 1;
+            document.getElementById('nextHistoryPage').disabled = appData.historyPage >= totalPages;
+            document.getElementById('historyCount').textContent = `Mostrando ${startIndex + 1}-${Math.min(startIndex + appData.itemsPerPage, totalItems)} de ${totalItems} entrenamientos`;
+            
+            updateMonthFilterOptions();
+        }
+
+        function renderHistoryRow(workout) {
+            let details = '';
+            let volumeReps = '';
+            
+            if (workout.type === 'weightlifting') {
+                details = workout.movementGroups?.map(g => g.movementName).join(', ') || 'Sin movimientos';
+                volumeReps = `${workout.totalVolume?.toFixed(1) || 0} kg`;
+            } else if (workout.type === 'wod') {
+                details = workout.wodType || 'WOD';
+                if (workout.description) details += `: ${workout.description}`;
+                volumeReps = workout.movements?.map(m => `${m.reps}x ${m.name}`).join(', ') || 'Sin movimientos';
+            }
+            
+            return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        ${new Date(workout.date).toLocaleDateString()}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span class="px-2 py-1 rounded-full text-xs ${workout.type === 'weightlifting' ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}">
+                            ${workout.type === 'weightlifting' ? 'Weightlifting' : 'WOD'}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title="${details}">
+                        ${details}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span class="px-2 py-1 rounded-full text-xs ${workout.rpe >= 8 ? 'bg-red-100 text-red-800' : workout.rpe >= 5 ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}">
+                            ${workout.rpe}/10
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${volumeReps}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button class="text-blue-600 hover:text-blue-900 mr-3" onclick="editWorkout('${workout.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="text-red-600 hover:text-red-900" onclick="deleteWorkout('${workout.id}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }
+
+        function updateMonthFilterOptions() {
+            const select = document.getElementById('historyMonthFilter');
+            if (select.options.length > 1) return;
+            
+            const months = [
+                'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+            ];
+            
+            const currentMonth = new Date().getMonth();
+            select.innerHTML = '<option value="all">Todos los meses</option>' + 
+                `<option value="${currentMonth}">Este mes (${months[currentMonth]})</option>`;
+        }
+
+        function editWorkout(workoutId) {
+            const workout = appData.workouts.find(w => w.id == workoutId);
+            if (!workout) return;
+            
+            if (workout.type === 'weightlifting') {
+                document.getElementById('weightliftingEditId').value = workout.id;
+                document.getElementById('wlDate').value = workout.date;
+                document.getElementById('wlRpe').value = workout.rpe;
+                
+                document.getElementById('movementGroupsContainer').innerHTML = '';
+                workout.movementGroups?.forEach(group => {
+                    addMovementGroup({
+                        movementId: group.movementId,
+                        sets: group.sets,
+                        setsData: group.setsData
+                    });
+                });
+                
+                calculateTotalVolume();
+                openModal('weightliftingModal');
+            } else if (workout.type === 'wod') {
+                document.getElementById('wodEditId').value = workout.id;
+                document.getElementById('wodDate').value = workout.date;
+                document.getElementById('wodType').value = workout.wodType;
+                document.getElementById('wodDescription').value = workout.description || '';
+                document.getElementById('wodRpe').value = workout.rpe;
+                document.getElementById('wodResult').value = workout.result;
+                
+                document.getElementById('wodMovementsContainer').innerHTML = '';
+                workout.movements?.forEach(mov => {
+                    const movementItem = document.createElement('div');
+                    movementItem.className = 'wod-movement-item flex items-center gap-3 p-2 bg-gray-50 rounded-lg fade-in';
+                    movementItem.dataset.id = mov.id;
+                    movementItem.innerHTML = `
+                        <span class="font-semibold flex-grow">${mov.name}</span>
+                        <input type="number" min="1" class="wod-reps-input w-24 px-2 py-1 border rounded-md" placeholder="Reps" value="${mov.reps}" required>
+                        <button type="button" class="text-red-500 hover:text-red-700" onclick="this.parentElement.remove()">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    `;
+                    document.getElementById('wodMovementsContainer').appendChild(movementItem);
+                });
+                
+                openModal('wodModal');
+            }
+        }
+
+        function deleteWorkout(workoutId) {
+            if (confirm('¿Estás seguro de que quieres eliminar este entrenamiento? Esta acción no se puede deshacer.')) {
+                appData.workouts = appData.workouts.filter(w => w.id != workoutId);
+                saveData();
+                updateAllSections();
+                showNotification('🗑️ Entrenamiento eliminado');
+            }
+        }
+
+        // Make functions available globally for HTML event handlers
+        window.showMovementStats = showMovementStats;
+        window.editMovement = editMovement;
+        window.deleteMovement = deleteMovement;
+        window.editWorkout = editWorkout;
+        window.deleteWorkout = deleteWorkout;
+    </script>
+</body>
+</html>
